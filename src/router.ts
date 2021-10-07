@@ -644,6 +644,7 @@ export function createRouter(options: RouterOptions): Router {
 
     const shouldRedirect = handleRedirectRecord(targetLocation)
 
+    // 有重定向
     if (shouldRedirect)
       return pushWithRedirect(
         assign(locationAsObject(shouldRedirect), {
@@ -661,6 +662,7 @@ export function createRouter(options: RouterOptions): Router {
     toLocation.redirectedFrom = redirectedFrom
     let failure: NavigationFailure | void | undefined
 
+    // scroll 操作
     if (!force && isSameRouteLocation(stringifyQuery, from, targetLocation)) {
       failure = createRouterError<NavigationFailure>(
         ErrorTypes.NAVIGATION_DUPLICATED,
@@ -679,70 +681,75 @@ export function createRouter(options: RouterOptions): Router {
       )
     }
 
-    return (failure ? Promise.resolve(failure) : navigate(toLocation, from))
-      .catch((error: NavigationFailure | NavigationRedirectError) =>
-        isNavigationFailure(error)
-          ? error
-          : // reject any unknown error
-            triggerError(error, toLocation, from)
-      )
-      .then((failure: NavigationFailure | NavigationRedirectError | void) => {
-        if (failure) {
-          if (
-            isNavigationFailure(failure, ErrorTypes.NAVIGATION_GUARD_REDIRECT)
-          ) {
+    return (
+      (failure ? Promise.resolve(failure) : navigate(toLocation, from))
+        .catch((error: NavigationFailure | NavigationRedirectError) =>
+          isNavigationFailure(error)
+            ? error
+            : // reject any unknown error
+              triggerError(error, toLocation, from)
+        )
+        // 成功或者失败都会走这
+        .then((failure: NavigationFailure | NavigationRedirectError | void) => {
+          if (failure) {
+            // 错误处理
             if (
-              __DEV__ &&
-              // we are redirecting to the same location we were already at
-              isSameRouteLocation(
-                stringifyQuery,
-                resolve(failure.to),
-                toLocation
-              ) &&
-              // and we have done it a couple of times
-              redirectedFrom &&
-              // @ts-expect-error: added only in dev
-              (redirectedFrom._count = redirectedFrom._count
-                ? // @ts-expect-error
-                  redirectedFrom._count + 1
-                : 1) > 10
+              isNavigationFailure(failure, ErrorTypes.NAVIGATION_GUARD_REDIRECT)
             ) {
-              warn(
-                `Detected an infinite redirection in a navigation guard when going from "${from.fullPath}" to "${toLocation.fullPath}". Aborting to avoid a Stack Overflow. This will break in production if not fixed.`
-              )
-              return Promise.reject(
-                new Error('Infinite redirect in navigation guard')
+              if (
+                __DEV__ &&
+                // we are redirecting to the same location we were already at
+                isSameRouteLocation(
+                  stringifyQuery,
+                  resolve(failure.to),
+                  toLocation
+                ) &&
+                // and we have done it a couple of times
+                redirectedFrom &&
+                // @ts-expect-error: added only in dev
+                (redirectedFrom._count = redirectedFrom._count
+                  ? // @ts-expect-error
+                    redirectedFrom._count + 1
+                  : 1) > 10
+              ) {
+                warn(
+                  `Detected an infinite redirection in a navigation guard when going from "${from.fullPath}" to "${toLocation.fullPath}". Aborting to avoid a Stack Overflow. This will break in production if not fixed.`
+                )
+                return Promise.reject(
+                  new Error('Infinite redirect in navigation guard')
+                )
+              }
+
+              return pushWithRedirect(
+                // keep options
+                assign(locationAsObject(failure.to), {
+                  state: data,
+                  force,
+                  replace,
+                }),
+                // preserve the original redirectedFrom if any
+                redirectedFrom || toLocation
               )
             }
-
-            return pushWithRedirect(
-              // keep options
-              assign(locationAsObject(failure.to), {
-                state: data,
-                force,
-                replace,
-              }),
-              // preserve the original redirectedFrom if any
-              redirectedFrom || toLocation
+          } else {
+            // 进行操作
+            // if we fail we don't finalize the navigation
+            failure = finalizeNavigation(
+              toLocation as RouteLocationNormalizedLoaded,
+              from,
+              true,
+              replace,
+              data
             )
           }
-        } else {
-          // if we fail we don't finalize the navigation
-          failure = finalizeNavigation(
+          triggerAfterEach(
             toLocation as RouteLocationNormalizedLoaded,
             from,
-            true,
-            replace,
-            data
+            failure
           )
-        }
-        triggerAfterEach(
-          toLocation as RouteLocationNormalizedLoaded,
-          from,
-          failure
-        )
-        return failure
-      })
+          return failure
+        })
+    )
   }
 
   /**
@@ -766,10 +773,12 @@ export function createRouter(options: RouterOptions): Router {
   ): Promise<any> {
     let guards: Lazy<any>[]
 
+    //
     const [leavingRecords, updatingRecords, enteringRecords] =
       extractChangingRecords(to, from)
 
     // all components here have been resolved once because we are leaving
+    // 路由守卫函数
     guards = extractComponentsGuards(
       leavingRecords.reverse(),
       'beforeRouteLeave',
@@ -1235,6 +1244,7 @@ function runGuardQueue(guards: Lazy<any>[]): Promise<void> {
   )
 }
 
+// 生成跳转时候额外的 record
 function extractChangingRecords(
   to: RouteLocationNormalized,
   from: RouteLocationNormalizedLoaded

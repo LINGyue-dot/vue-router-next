@@ -86,6 +86,8 @@ export function createRouterMatcher(
     const normalizedRecords: typeof mainNormalizedRecord[] = [
       mainNormalizedRecord,
     ]
+    // 别名 实际匹配的是 record.path
+    // 添加新的一条 path:record.alias 其余属性相同的 record
     if ('alias' in record) {
       const aliases =
         typeof record.alias === 'string' ? [record.alias] : record.alias!
@@ -112,11 +114,15 @@ export function createRouterMatcher(
     let matcher: RouteRecordMatcher
     let originalMatcher: RouteRecordMatcher | undefined
 
+    // normalizedRecords 是 alias 的数组
+    // 遍历得到值
     for (const normalizedRecord of normalizedRecords) {
       const { path } = normalizedRecord
       // Build up the path for nested routes if the child isn't an absolute
       // route. Only add the / delimiter if the child path isn't empty and if the
       // parent path doesn't have a trailing slash
+      // 为嵌套路由添加 /
+      // 生成子路由的完整 path
       if (parent && path[0] !== '/') {
         const parentPath = parent.record.path
         const connectingSlash =
@@ -158,6 +164,7 @@ export function createRouterMatcher(
 
       if ('children' in mainNormalizedRecord) {
         const children = mainNormalizedRecord.children
+
         for (let i = 0; i < children.length; i++) {
           addRoute(
             children[i],
@@ -176,11 +183,13 @@ export function createRouterMatcher(
       //   parent.children.push(originalRecord)
       // }
 
+      // 添加到 map 中
       insertMatcher(matcher)
     }
 
     return originalMatcher
       ? () => {
+          // !!! NOTICE
           // since other matchers are aliases, they should be removed by the original matcher
           removeRoute(originalMatcher!)
         }
@@ -410,6 +419,7 @@ function mergeMetaFields(matched: MatcherLocation['matched']) {
   )
 }
 
+// 合并对象属性
 function mergeOptions<T>(defaults: T, partialOptions: Partial<T>): T {
   const options = {} as T
   for (const key in defaults) {

@@ -41,7 +41,10 @@ function createCurrentLocation(
   const { pathname, search, hash } = location
   // allows hash bases like #, /#, #/, #!, #!/, /#!/, or even /folder#end
   const hashPos = base.indexOf('#')
+  // !!! NOTICE
   if (hashPos > -1) {
+    // 存在 #
+    // base.slice(hashPos) 截取 hash 之后的所有值例如 qwewe#qwe => #qwe
     let slicePos = hash.includes(base.slice(hashPos))
       ? base.slice(hashPos).length
       : 1
@@ -76,7 +79,12 @@ function useHistoryListeners(
     const fromState: StateEntry = historyState.value
     let delta = 0
 
+    console.log('----------', state)
+
+    // 如果是 spa 内跳转
     if (state) {
+      // !!! NOTICE
+      // 修改
       currentLocation.value = to
       historyState.value = state
 
@@ -87,6 +95,7 @@ function useHistoryListeners(
       }
       delta = fromState ? state.position - fromState.position : 0
     } else {
+      // 直接调用
       replace(to)
     }
 
@@ -178,11 +187,13 @@ function useHistoryStateNavigation(base: string) {
 
   // private variables
   const currentLocation: ValueContainer<HistoryLocation> = {
-    value: createCurrentLocation(base, location),
+    value: createCurrentLocation(base, location), // 得到 path + searcgh + hash
   }
   const historyState: ValueContainer<StateEntry> = { value: history.state }
   // build current history entry as this is a fresh navigation
+  // 没有跳转，直接进入
   if (!historyState.value) {
+    // !!! 这里的 changeLocation 作用是？
     changeLocation(
       currentLocation.value,
       {
@@ -192,7 +203,7 @@ function useHistoryStateNavigation(base: string) {
         // the length is off by one, we need to decrease it
         position: history.length - 1,
         replaced: true,
-        // don't add a scroll as the user may have an anchor and we want
+        // don't add a scroll as the  user may have an anchor and we want
         // scrollBehavior to be triggered without a saved position
         scroll: null,
       },
@@ -200,6 +211,7 @@ function useHistoryStateNavigation(base: string) {
     )
   }
 
+  // 修改 URL
   function changeLocation(
     to: HistoryLocation,
     state: StateEntry,
@@ -217,10 +229,12 @@ function useHistoryStateNavigation(base: string) {
     const hashIndex = base.indexOf('#')
     const url =
       hashIndex > -1
-        ? (location.host && document.querySelector('base')
+        ? // 存在 #
+          (location.host && document.querySelector('base')
             ? base
             : base.slice(hashIndex)) + to
         : createBaseLocation() + base + to
+
     try {
       // BROWSER QUIRK
       // NOTE: Safari throws a SecurityError when calling this function 100 times in 30 seconds
@@ -237,6 +251,7 @@ function useHistoryStateNavigation(base: string) {
     }
   }
 
+  // !!! replace 仍然可以回退
   function replace(to: HistoryLocation, data?: HistoryState) {
     const state: StateEntry = assign(
       {},
@@ -255,6 +270,9 @@ function useHistoryStateNavigation(base: string) {
     changeLocation(to, state, true)
     currentLocation.value = to
   }
+
+  //@ts-ignore
+  window.push = push
 
   function push(to: HistoryLocation, data?: HistoryState) {
     // Add to current entry the information of where we are going
@@ -280,6 +298,7 @@ function useHistoryStateNavigation(base: string) {
       )
     }
 
+    // !!! NOTICE 此处为什么要 twice call changeLocation push 执行路由守卫如何执行 ???
     changeLocation(currentState.current, currentState, true)
 
     const state: StateEntry = assign(
@@ -296,7 +315,6 @@ function useHistoryStateNavigation(base: string) {
   return {
     location: currentLocation,
     state: historyState,
-
     push,
     replace,
   }
@@ -304,6 +322,7 @@ function useHistoryStateNavigation(base: string) {
 
 /**
  * Creates an HTML5 history. Most common history for single page applications.
+ * 初始化 historyNavigation 导航器以及 historyListeners 监听器
  *
  * @param base -
  */
@@ -311,17 +330,23 @@ export function createWebHistory(base?: string): RouterHistory {
   base = normalizeBase(base)
 
   const historyNavigation = useHistoryStateNavigation(base)
+
+  // historyNavigation === history.state
+
   const historyListeners = useHistoryListeners(
     base,
     historyNavigation.state,
     historyNavigation.location,
     historyNavigation.replace
   )
+
+  console.log(historyListeners)
   function go(delta: number, triggerListeners = true) {
     if (!triggerListeners) historyListeners.pauseListeners()
     history.go(delta)
   }
 
+  // 带有监听器 导航器 路由信息以及 go 函数的对象
   const routerHistory: RouterHistory = assign(
     {
       // it's overridden right after
@@ -330,10 +355,11 @@ export function createWebHistory(base?: string): RouterHistory {
       go,
       createHref: createHref.bind(null, base),
     },
-
     historyNavigation,
     historyListeners
   )
+  //@ts-ignore
+  window.routerHistory = routerHistory
 
   Object.defineProperty(routerHistory, 'location', {
     enumerable: true,

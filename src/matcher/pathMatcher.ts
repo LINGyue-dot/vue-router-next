@@ -16,17 +16,23 @@ export interface RouteRecordMatcher extends PathParser {
   alias: RouteRecordMatcher[]
 }
 
+// 生成 record
 export function createRouteRecordMatcher(
   record: Readonly<RouteRecord>,
   parent: RouteRecordMatcher | undefined,
   options?: PathParserOptions
 ): RouteRecordMatcher {
+  // 每个路由对应的路由对象
+  // !!! NOTICE
   const parser = tokensToParser(tokenizePath(record.path), options)
+  //@ts-ignore
+  // console.log(parser.record)
 
   // warn against params with the same name
   if (__DEV__) {
     const existingKeys = new Set<string>()
     for (const key of parser.keys) {
+      // /:id  keys :[{name:'id'}]
       if (existingKeys.has(key.name))
         warn(
           `Found duplicated params with name "${key.name}" for path "${record.path}". Only the last one will be available on "$route.params".`
@@ -35,6 +41,7 @@ export function createRouteRecordMatcher(
     }
   }
 
+  // 后分配给前面
   const matcher: RouteRecordMatcher = assign(parser, {
     record,
     parent,
@@ -42,6 +49,8 @@ export function createRouteRecordMatcher(
     children: [],
     alias: [],
   })
+
+  // console.log(matcher)
 
   if (parent) {
     // both are aliases or both are not aliases
