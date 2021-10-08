@@ -635,8 +635,10 @@ export function createRouter(options: RouterOptions): Router {
     to: RouteLocationRaw | RouteLocation,
     redirectedFrom?: RouteLocation
   ): Promise<NavigationFailure | void | undefined> {
+    // resolve 来获取目标路由 matcher
     const targetLocation: RouteLocation = (pendingLocation = resolve(to))
     const from = currentRoute.value
+    // 携带数据
     const data: HistoryState | undefined = (to as RouteLocationOptions).state
     const force: boolean | undefined = (to as RouteLocationOptions).force
     // to could be a string where `replace` is a function
@@ -662,7 +664,7 @@ export function createRouter(options: RouterOptions): Router {
     toLocation.redirectedFrom = redirectedFrom
     let failure: NavigationFailure | void | undefined
 
-    // scroll 操作
+    // 如果不是强制跳转且是相同路由
     if (!force && isSameRouteLocation(stringifyQuery, from, targetLocation)) {
       failure = createRouterError<NavigationFailure>(
         ErrorTypes.NAVIGATION_DUPLICATED,
@@ -805,35 +807,33 @@ export function createRouter(options: RouterOptions): Router {
     return (
       runGuardQueue(guards)
         .then(() => {
-          // check global guards beforeEach
+          // beforeEach 函数执行
           guards = []
           for (const guard of beforeGuards.list()) {
             guards.push(guardToPromiseFn(guard, to, from))
           }
           guards.push(canceledNavigationCheck)
-
           return runGuardQueue(guards)
         })
         .then(() => {
-          // check in components beforeRouteUpdate
+          // beforeRouteUpdate 函数执行
           guards = extractComponentsGuards(
             updatingRecords,
             'beforeRouteUpdate',
             to,
             from
           )
-
           for (const record of updatingRecords) {
             record.updateGuards.forEach(guard => {
               guards.push(guardToPromiseFn(guard, to, from))
             })
           }
           guards.push(canceledNavigationCheck)
-
           // run the queue of per route beforeEnter guards
           return runGuardQueue(guards)
         })
         .then(() => {
+          // beforeEnter 守卫函数执行
           // check the route beforeEnter
           guards = []
           for (const record of to.matched) {
@@ -853,6 +853,7 @@ export function createRouter(options: RouterOptions): Router {
           return runGuardQueue(guards)
         })
         .then(() => {
+          // beforeRouteEnter 守卫函数执行
           // NOTE: at this point to.matched is normalized and does not contain any () => Promise<Component>
 
           // clear existing enterCallbacks, these are added by extractComponentsGuards
@@ -871,7 +872,7 @@ export function createRouter(options: RouterOptions): Router {
           return runGuardQueue(guards)
         })
         .then(() => {
-          // check global guards beforeResolve
+          // beforeResolve 函数执行
           guards = []
           for (const guard of beforeResolveGuards.list()) {
             guards.push(guardToPromiseFn(guard, to, from))
@@ -1208,12 +1209,14 @@ export function createRouter(options: RouterOptions): Router {
         reactiveRoute[key] = computed(() => currentRoute.value[key])
       }
 
+      // provide
       app.provide(routerKey, router)
       app.provide(routeLocationKey, reactive(reactiveRoute))
       app.provide(routerViewLocationKey, currentRoute)
 
       const unmountApp = app.unmount
       installedApps.add(app)
+      // 重写 unmount 函数，在 app unmount 时候去除监听器等
       app.unmount = function () {
         installedApps.delete(app)
         // the router is not attached to an app anymore
@@ -1244,21 +1247,25 @@ function runGuardQueue(guards: Lazy<any>[]): Promise<void> {
   )
 }
 
-// 生成跳转时候额外的 record
 function extractChangingRecords(
   to: RouteLocationNormalized,
   from: RouteLocationNormalizedLoaded
 ) {
+  // 需卸载的路由数组 from 中需要渲染的组件而 to 中不需要渲染的
   const leavingRecords: RouteRecordNormalized[] = []
+  // 复用的路由数组 to 和 from 都需要渲染的组件进行复用
   const updatingRecords: RouteRecordNormalized[] = []
+  // 新添加的路由数组 to 中有的 from 中没有的
   const enteringRecords: RouteRecordNormalized[] = []
 
   const len = Math.max(from.matched.length, to.matched.length)
   for (let i = 0; i < len; i++) {
     const recordFrom = from.matched[i]
     if (recordFrom) {
+      // 选出 to 和 from 的共同组件
       if (to.matched.find(record => isSameRouteRecord(record, recordFrom)))
         updatingRecords.push(recordFrom)
+      // to 不需要渲染的组件
       else leavingRecords.push(recordFrom)
     }
     const recordTo = to.matched[i]
@@ -1269,6 +1276,5 @@ function extractChangingRecords(
       }
     }
   }
-
   return [leavingRecords, updatingRecords, enteringRecords]
 }

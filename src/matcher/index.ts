@@ -187,6 +187,8 @@ export function createRouterMatcher(
       insertMatcher(matcher)
     }
 
+    // 即源路由（即没有别名的路由源路由就是本身，有别名的路由源路由就是原名的路由）的 matcher
+    // 返回一个 remove 函数
     return originalMatcher
       ? () => {
           // !!! NOTICE
@@ -245,6 +247,7 @@ export function createRouterMatcher(
     let path: MatcherLocation['path']
     let name: MatcherLocation['name']
 
+    // 命名路由
     if ('name' in location && location.name) {
       matcher = matcherMap.get(location.name)
 
@@ -277,6 +280,7 @@ export function createRouterMatcher(
         )
       }
 
+      // 正则查找匹配的 matcher
       matcher = matchers.find(m => m.re.test(path))
       // matcher should have a value after the loop
 
@@ -306,9 +310,9 @@ export function createRouterMatcher(
 
     const matched: MatcherLocation['matched'] = []
     let parentMatcher: RouteRecordMatcher | undefined = matcher
+    // 不断递归向父元素查找，并将祖先元素置于数组前
     while (parentMatcher) {
       // reversed order so parents are at the beginning
-
       matched.unshift(parentMatcher.record)
       parentMatcher = parentMatcher.parent
     }

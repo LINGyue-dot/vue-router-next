@@ -236,7 +236,9 @@ export function extractComponentsGuards(
   const guards: Array<() => Promise<void>> = []
 
   for (const record of matched) {
+    // 遍历组件中 export
     for (const name in record.components) {
+      //
       let rawComponent = record.components[name]
       if (__DEV__) {
         if (
@@ -278,9 +280,15 @@ export function extractComponentsGuards(
         }
       }
 
+      console.log(record.instances[name])
       // skip update and leave guards if the route component is not mounted
+      // !!! NOTICE 如果不是 beforeRouteEnter 且没有默认导出组件就跳过本次循环
+      // !!! aim to what ?
+      // record.instances 为文件实例  name 就是导入模式
+      // console.log( name) // default
       if (guardType !== 'beforeRouteEnter' && !record.instances[name]) continue
 
+      // 如果是组件
       if (isRouteComponent(rawComponent)) {
         // __vccOpts is added by vue-class-component and contain the regular options
         const options: ComponentOptions =
@@ -288,6 +296,7 @@ export function extractComponentsGuards(
         const guard = options[guardType]
         guard && guards.push(guardToPromiseFn(guard, to, from, record, name))
       } else {
+        // 如果是以懒加载模式引入的异步组件
         // start requesting the chunk already
         let componentPromise: Promise<
           RouteComponent | null | undefined | void
@@ -302,6 +311,7 @@ export function extractComponentsGuards(
 
         guards.push(() =>
           componentPromise.then(resolved => {
+            // 引入组件之后再进行操作
             if (!resolved)
               return Promise.reject(
                 new Error(
@@ -324,6 +334,7 @@ export function extractComponentsGuards(
     }
   }
 
+  // guards 内的函数都是 Promise
   return guards
 }
 
